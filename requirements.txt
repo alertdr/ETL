@@ -1,0 +1,4 @@
+psycopg2-binary==2.9.3
+python-dotenv==0.19.2
+flake8==4.0
+elasticsearch==7.10.1

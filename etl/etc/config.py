@@ -1,3 +1,4 @@
+import json
 import os
 
 from dotenv import load_dotenv
@@ -13,9 +14,11 @@ DSL = {
 }
 
 ES_CONFIG = {
-    'hosts': os.environ.get('ES_HOSTS', ['127.0.0.1']),
+    'hosts': json.loads(os.environ.get('ES_HOSTS', "['127.0.0.1']")),
     'index_name': os.environ.get('INDEX_NAME', 'movies'),
     'movies_settings': 'etc/movies_settings.json'
 }
 
 BATCH_SIZE = 500
+
+AWAIT_TIME = 60

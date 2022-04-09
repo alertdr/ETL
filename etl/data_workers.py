@@ -49,7 +49,7 @@ class PostgresLoader:
         :param filmwork_id: id кинопроизведения
         :return: результат извлечения времени последнего изменения конкретного кинопроизведения
         """
-        self.cursor.execute(f"SELECT modified FROM film_work WHERE id = '{filmwork_id}'")
+        self.cursor.execute(f'SELECT modified FROM film_work WHERE id = \'{filmwork_id}\'')
         return self.cursor.fetchone()
 
 

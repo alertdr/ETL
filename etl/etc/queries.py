@@ -1,4 +1,4 @@
-QUERIES = {'full_filmwork': lambda date=None: f"""SELECT film_work.id,
+QUERIES = {'full_filmwork': lambda date=None: f'''SELECT film_work.id,
        film_work.title,
        film_work.description,
        film_work.rating,
@@ -20,4 +20,4 @@ FROM film_work
                          ON (person_film_work.person_id = person.id)
 WHERE  {date if date else 'to_timestamp(0)'} < film_work.modified
 GROUP BY film_work.id
-ORDER BY film_work.modified;"""}
+ORDER BY film_work.modified;'''}

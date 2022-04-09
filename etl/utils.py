@@ -42,4 +42,4 @@ def get_format_time(*, time: str) -> str:
     :param time: начальное время повтора
     :return: результат форматирования, в случае. если поле отсутствует - возвращается None
     """
-    return f"'{time}'" if time else None
+    return f'\'{time}\'' if time else None

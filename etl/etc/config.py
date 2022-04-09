@@ -14,7 +14,7 @@ DSL = {
 }
 
 ES_CONFIG = {
-    'hosts': json.loads(os.environ.get('ES_HOSTS', "['127.0.0.1']")),
+    'hosts': json.loads(os.environ.get('ES_HOSTS', '[\'127.0.0.1\']')),
     'index_name': os.environ.get('INDEX_NAME', 'movies'),
     'movies_settings': 'etc/movies_settings.json'
 }

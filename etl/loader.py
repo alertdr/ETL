@@ -67,7 +67,7 @@ def load_data(*, data: Generator) -> None:
                     state.set_state(key='person', value=person_state.isoformat())
 
 
-# @backoff()
+@backoff()
 def main() -> None:
     """
     Отказоустойчивая ETL функция

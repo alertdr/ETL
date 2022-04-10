@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Generator, Optional, Union
 
 import psycopg2
@@ -8,6 +9,9 @@ from elasticsearch import Elasticsearch
 from psycopg2.extras import DictCursor
 
 from etc.config import DSL, ES_CONFIG
+
+person_latest_modified: Optional[datetime] = None
+genre_latest_modified: Optional[datetime] = None
 
 
 class PostgresLoader:
@@ -98,10 +102,14 @@ class Filmwork:
     actors: Optional[Union[list[dict], dict]]
     director: list[str]
     writers: Optional[Union[list[dict], dict]]
+    person_time: list
+    genre_time: list
     actors_names: Optional[list] = None
     writers_names: Optional[list] = None
 
     def __post_init__(self):
+        global person_latest_modified
+        global genre_latest_modified
         if self.actors:
             self.actors_names = list(self.actors.keys())
             self.actors = [{'id': v, 'name': k} for k, v in self.actors.items()]
@@ -113,14 +121,34 @@ class Filmwork:
         if not self.director:
             self.director = []
 
+        person_latest_modified = self.set_latest(current=person_latest_modified, obj_time=self.person_time)
+        genre_latest_modified = self.set_latest(current=genre_latest_modified, obj_time=self.genre_time)
+
     def get_bulk_format(self) -> dict:
         """
         Метод возврата словаря для bulk запроса elasticsearch
 
         :return: словарь для bulk запросов elasticsearch
         """
+        del self.person_time
+        del self.genre_time
         return {
             '_index': ES_CONFIG['index_name'],
             '_id': self.id,
             '_source': {**self.__dict__}
         }
+
+    @staticmethod
+    def get_db_states():
+        return person_latest_modified, genre_latest_modified
+
+    @staticmethod
+    def set_latest(*, current: Optional[datetime] = None, obj_time: list) -> datetime:
+        if not all(obj_time):
+            return current
+        if current:
+            if current < max(obj_time):
+                current = max(obj_time)
+        else:
+            current = max(obj_time)
+        return current

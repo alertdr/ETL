@@ -7,7 +7,7 @@ from typing import Generator
 from elasticsearch import helpers
 
 from data_workers import PostgresLoader, ElasticsearchLoader, Filmwork
-from etc.config import BATCH_SIZE, AWAIT_TIME, TABLES
+from etc.config import BATCH_SIZE, AWAIT_TIME, TABLES, LOGGER_CONF_PATH, STATE_FILE_PATH
 from etl.etc.queries import QUERIES
 from state import State, JsonFileStorage
 from utils import backoff, get_format_time
@@ -48,7 +48,6 @@ def load_data(*, data: Generator) -> None:
     Функция загрузки данных в elasticsearch
 
     :param data: начальное время повтора
-    :param query_name: имя sql запроса необходимое для сохранения состояния последнего добавленного элемента
     """
     last_event = None
     with ElasticsearchLoader() as es:
@@ -71,8 +70,6 @@ def load_data(*, data: Generator) -> None:
 def main() -> None:
     """
     Отказоустойчивая ETL функция
-
-    :param query: sql запрос
     """
     data = extract_data()
     pretty_data = transform_data(data=data)
@@ -80,10 +77,10 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    config.fileConfig("etc/logger.conf")
-    state = State(storage=JsonFileStorage(file_path='state.json'))
+    config.fileConfig(LOGGER_CONF_PATH)
+    state = State(storage=JsonFileStorage(file_path=STATE_FILE_PATH))
     while True:
-        logging.info(f'Query started')
+        logging.info('Query started')
         states = [state.get_state(key=table) for table in TABLES]
         filmwork_date, genre_date, person_date = [get_format_time(time=state_time) for state_time in states]
         main()

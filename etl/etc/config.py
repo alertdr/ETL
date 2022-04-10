@@ -20,6 +20,8 @@ ES_CONFIG = {
 }
 
 TABLES = ('filmwork', 'genre', 'person')
+LOGGER_CONF_PATH = 'etc/logger.conf'
+STATE_FILE_PATH = 'state.json'
 BATCH_SIZE = 500
 
 AWAIT_TIME = 60

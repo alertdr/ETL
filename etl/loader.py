@@ -7,26 +7,29 @@ from typing import Generator
 from elasticsearch import helpers
 
 from data_workers import PostgresLoader, ElasticsearchLoader, Filmwork
-from etc.config import BATCH_SIZE, AWAIT_TIME
+from etc.config import BATCH_SIZE, AWAIT_TIME, TABLES
 from etl.etc.queries import QUERIES
 from state import State, JsonFileStorage
 from utils import backoff, get_format_time
 
 
-def extract_data(*, query: str) -> Generator:
+def extract_data() -> Generator:
     """
     Функция извлечения данных из postgresql, нет возможности применить декортаор backoff() так как
     генератор инициализируется только в transform_data. В случае возникновения ошибки в extract_data
     отловить её можно будет только в transform_data. Были предприняты попытки написать еще один декоратор
     для инициализации генератора, но они не увенчались успехом
 
-    :param query: sql запрос
     :yield: item: единичный результат выполнения sql запроса
     """
-    with PostgresLoader(fetch_size=BATCH_SIZE) as pg:
-        for data in pg.batch_execute(query=query):
-            for item in data:
-                yield item
+    with PostgresLoader(fetch_size=BATCH_SIZE) as pg_ids:
+        for ids in pg_ids.batch_execute(query=QUERIES['get_ids'](filmwork_date, genre_date, person_date)):
+            pretty_ids = tuple([i.pop() for i in ids])
+
+            with PostgresLoader(fetch_size=BATCH_SIZE) as pg_filmworks:
+                for data in pg_filmworks.batch_execute(query=QUERIES['filmwork'](pretty_ids)):
+                    for item in data:
+                        yield item
 
 
 def transform_data(*, data: Generator) -> Generator:
@@ -40,7 +43,7 @@ def transform_data(*, data: Generator) -> Generator:
         yield Filmwork(*item).get_bulk_format()
 
 
-def load_data(*, data: Generator, query_name: str) -> None:
+def load_data(*, data: Generator) -> None:
     """
     Функция загрузки данных в elasticsearch
 
@@ -58,30 +61,31 @@ def load_data(*, data: Generator, query_name: str) -> None:
             if last_event:
                 with PostgresLoader() as pg:
                     modified, = pg.get_filmwork_modified(filmwork_id=last_event['index']['_id'])
-                    state.set_state(key=query_name, value=modified.isoformat())
+                    person_state, genre_state = Filmwork.get_db_states()
+                    state.set_state(key='filmwork', value=modified.isoformat())
+                    state.set_state(key='genre', value=genre_state.isoformat())
+                    state.set_state(key='person', value=person_state.isoformat())
 
 
-@backoff()
-def main(*, query_name: str, query: str) -> None:
+# @backoff()
+def main() -> None:
     """
     Отказоустойчивая ETL функция
 
-    :param data: начальное время повтора
-    :param query_name: имя sql запроса необходимое для сохранения состояния последнего добавленного элемента
+    :param query: sql запрос
     """
-    data = extract_data(query=query)
+    data = extract_data()
     pretty_data = transform_data(data=data)
-    load_data(data=pretty_data, query_name=query_name)
+    load_data(data=pretty_data)
 
 
 if __name__ == '__main__':
     config.fileConfig("etc/logger.conf")
     state = State(storage=JsonFileStorage(file_path='state.json'))
     while True:
-        for query_name, sql_query in QUERIES.items():
-            logging.info(f'Query {query_name} started')
-            time = get_format_time(time=state.get_state(key=query_name))
-            query = sql_query(time)
-            main(query_name=query_name, query=query)
-
+        logging.info(f'Query started')
+        states = [state.get_state(key=table) for table in TABLES]
+        filmwork_date, genre_date, person_date = [get_format_time(time=state_time) for state_time in states]
+        main()
+        logging.info(f'Wait time {AWAIT_TIME}')
         sleep(AWAIT_TIME)

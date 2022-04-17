@@ -8,17 +8,15 @@ from elasticsearch import helpers
 
 from data_workers import PostgresLoader, ElasticsearchLoader, Filmwork
 from etc.config import BATCH_SIZE, AWAIT_TIME, TABLES, LOGGER_CONF_PATH, STATE_FILE_PATH
-from etl.etc.queries import QUERIES
+from etc.queries import QUERIES
 from state import State, JsonFileStorage
 from utils import backoff, get_format_time
 
 
+@backoff()
 def extract_data() -> Generator:
     """
-    Функция извлечения данных из postgresql, нет возможности применить декортаор backoff() так как
-    генератор инициализируется только в transform_data. В случае возникновения ошибки в extract_data
-    отловить её можно будет только в transform_data. Были предприняты попытки написать еще один декоратор
-    для инициализации генератора, но они не увенчались успехом
+    Функция извлечения данных из postgresql
 
     :yield: item: единичный результат выполнения sql запроса
     """
@@ -43,6 +41,7 @@ def transform_data(*, data: Generator) -> Generator:
         yield Filmwork(*item).get_bulk_format()
 
 
+@backoff()
 def load_data(*, data: Generator) -> None:
     """
     Функция загрузки данных в elasticsearch
@@ -66,7 +65,6 @@ def load_data(*, data: Generator) -> None:
                     state.set_state(key='person', value=person_state.isoformat())
 
 
-@backoff()
 def main() -> None:
     """
     Отказоустойчивая ETL функция

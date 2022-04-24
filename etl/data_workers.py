@@ -9,9 +9,7 @@ from elasticsearch import Elasticsearch
 from psycopg2.extras import DictCursor
 
 from etc.config import DSL, ES_CONFIG
-
-person_latest_modified: Optional[datetime] = None
-genre_latest_modified: Optional[datetime] = None
+from utils import latest_modified, format_set, latest_modified_datetime
 
 
 class PostgresLoader:
@@ -63,16 +61,17 @@ class ElasticsearchLoader:
     """
 
     def __init__(self):
-        self.index_name = ES_CONFIG['index_name']
-        self._mapping = self.load_settings(ES_CONFIG['movies_settings'])
+        self.index_name = ES_CONFIG['index_names']
 
     def __enter__(self) -> Elasticsearch:
         logging.debug('Connecting to elasticsearch')
         self.es = Elasticsearch(ES_CONFIG['hosts'])
-        if not self.es.indices.exists(self.index_name):
-            logging.debug(f'Elasticsearch index {self.index_name} does not exists')
-            self.es.indices.create(index=self.index_name, body=self._mapping)
-            logging.debug(f'Elasticsearch index {self.index_name} created')
+        for index in self.index_name.values():
+            if not self.es.indices.exists(index):
+                logging.debug(f'Elasticsearch index {index} does not exists')
+                mapping = self.load_settings(ES_CONFIG['movies_settings'][index])
+                self.es.indices.create(index=index, body=mapping)
+                logging.debug(f'Elasticsearch index {index} created')
         logging.debug(f'Elasticsearch connection complete')
         return self.es
 
@@ -98,31 +97,35 @@ class Filmwork:
     title: str
     description: str
     imdb_rating: float
-    genre: list[str]
+    creation_date: datetime
+    genre: Optional[Union[list[dict], dict]]
     actors: Optional[Union[list[dict], dict]]
-    director: list[str]
+    director: Optional[Union[list[dict], dict]]
     writers: Optional[Union[list[dict], dict]]
     person_time: list
     genre_time: list
+    filmwork_time: datetime
+    directors_names: Optional[list] = None
     actors_names: Optional[list] = None
     writers_names: Optional[list] = None
+    genres_names: Optional[list] = None
+    filmwork_latest_modified = None
+    genre_latest_modified = None
+    person_latest_modified = None
 
     def __post_init__(self):
-        global person_latest_modified
-        global genre_latest_modified
-        if self.actors:
-            self.actors_names = list(self.actors.keys())
-            self.actors = [{'id': v, 'name': k} for k, v in self.actors.items()]
+        self.actors_names, self.actors = format_set(data=self.actors)
+        self.writers_names, self.writers = format_set(data=self.writers)
+        self.directors_names, self.director = format_set(data=self.director)
+        self.genres_names, self.genre = format_set(data=self.genre)
 
-        if self.writers:
-            self.writers_names = list(self.writers.keys())
-            self.writers = [{'id': v, 'name': k} for k, v in self.writers.items()]
+        self.set_latest(fw_time=self.filmwork_time, person_time=self.person_time, genre_time=self.genre_time)
 
-        if not self.director:
-            self.director = []
-
-        person_latest_modified = self.set_latest(current=person_latest_modified, obj_time=self.person_time)
-        genre_latest_modified = self.set_latest(current=genre_latest_modified, obj_time=self.genre_time)
+    @classmethod
+    def set_latest(cls, *, fw_time, person_time, genre_time):
+        cls.filmwork_latest_modified = latest_modified_datetime(current=cls.filmwork_latest_modified, obj_time=fw_time)
+        cls.person_latest_modified = latest_modified(current=cls.person_latest_modified, obj_time=person_time)
+        cls.genre_latest_modified = latest_modified(current=cls.genre_latest_modified, obj_time=genre_time)
 
     def get_bulk_format(self) -> dict:
         """
@@ -130,25 +133,102 @@ class Filmwork:
 
         :return: словарь для bulk запросов elasticsearch
         """
-        del self.person_time
-        del self.genre_time
+        source = self.__dict__.copy()
+        del source['person_time'], source['genre_time'], source['filmwork_time']
+        if all((source.get('filmwork_latest_modified'),
+                source.get('genre_latest_modified'),
+                source.get('person_latest_modified'))):
+            del source['filmwork_latest_modified'], source['genre_latest_modified'], source['person_latest_modified']
         return {
-            '_index': ES_CONFIG['index_name'],
+            '_index': ES_CONFIG['index_names']['movies'],
             '_id': self.id,
-            '_source': {**self.__dict__}
+            '_source': {**source}
         }
 
-    @staticmethod
-    def get_db_states():
-        return person_latest_modified, genre_latest_modified
+    @classmethod
+    def get_db_state(cls):
+        return {
+            'filmwork_date': cls.filmwork_latest_modified,
+            'person_date': cls.person_latest_modified,
+            'genre_date': cls.genre_latest_modified
+        }
 
-    @staticmethod
-    def set_latest(*, current: Optional[datetime] = None, obj_time: list) -> datetime:
-        if not all(obj_time):
-            return current
-        if current:
-            if current < max(obj_time):
-                current = max(obj_time)
-        else:
-            current = max(obj_time)
-        return current
+
+@dataclass
+class Person:
+    id: str
+    full_name: str
+    films_as_actor: list | None
+    films_as_director: list | None
+    films_as_writer: list | None
+    person_time: datetime
+    filmwork_time: list
+    filmwork_latest_modified = None
+    person_latest_modified = None
+
+    def __post_init__(self):
+        self.set_latest(fw_time=self.filmwork_time, person_time=self.person_time)
+
+    @classmethod
+    def set_latest(cls, *, fw_time, person_time):
+        cls.filmwork_latest_modified = latest_modified(current=cls.filmwork_latest_modified, obj_time=fw_time)
+        cls.person_latest_modified = latest_modified_datetime(current=cls.person_latest_modified, obj_time=person_time)
+
+    def get_bulk_format(self) -> dict:
+        """
+        Метод возврата словаря для bulk запроса elasticsearch
+
+        :return: словарь для bulk запросов elasticsearch
+        """
+        source = self.__dict__.copy()
+        del source['person_time'], source['filmwork_time']
+        if all((source.get('filmwork_latest_modified'), source.get('person_latest_modified'))):
+            del source['filmwork_latest_modified'], source['person_latest_modified']
+        return {
+            '_index': ES_CONFIG['index_names']['persons'],
+            '_id': self.id,
+            '_source': {**source}
+        }
+
+    @classmethod
+    def get_db_state(cls):
+        return {
+            'filmwork_date': cls.filmwork_latest_modified,
+            'person_date': cls.person_latest_modified
+        }
+
+
+@dataclass
+class Genre:
+    id: str
+    name: str
+    description: str
+    genre_time: datetime
+    genre_latest_modified = None
+
+    def __post_init__(self):
+        self.set_latest(genre_time=self.genre_time)
+
+    @classmethod
+    def set_latest(cls, *, genre_time):
+        cls.genre_latest_modified = latest_modified_datetime(current=cls.genre_latest_modified, obj_time=genre_time)
+
+    def get_bulk_format(self) -> dict:
+        """
+        Метод возврата словаря для bulk запроса elasticsearch
+
+        :return: словарь для bulk запросов elasticsearch
+        """
+        source = self.__dict__.copy()
+        del source['genre_time']
+        if source.get('genre_latest_modified'):
+            del source['genre_latest_modified']
+        return {
+            '_index': ES_CONFIG['index_names']['genres'],
+            '_id': self.id,
+            '_source': {**source}
+        }
+
+    @classmethod
+    def get_db_state(cls):
+        return {'genre_date': cls.genre_latest_modified}

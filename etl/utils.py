@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 from functools import wraps
 from time import sleep
+from typing import Optional
 
 
 def backoff(start_sleep_time=0.1, factor=2, border_sleep_time=10):
@@ -43,3 +45,34 @@ def get_format_time(*, time: str) -> str:
     :return: результат форматирования, в случае. если поле отсутствует - возвращается None
     """
     return f'\'{time}\'' if time else None
+
+
+def latest_modified(*, current: Optional[datetime] = None, obj_time: list) -> datetime:
+    if not all(obj_time):
+        return current
+
+    if current:
+        if current < max(obj_time):
+            current = max(obj_time)
+    else:
+        current = max(obj_time)
+    return current
+
+
+def latest_modified_datetime(*, current: Optional[datetime] = None, obj_time: datetime) -> datetime:
+    if not obj_time:
+        return current
+
+    if current:
+        if current < obj_time:
+            current = obj_time
+    else:
+        current = obj_time
+    return current
+
+
+def format_set(*, data: dict) -> tuple:
+    if data:
+        return list(data.keys()), [{'id': v, 'name': k} for k, v in data.items()]
+    else:
+        return None, None

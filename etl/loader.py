@@ -49,7 +49,7 @@ def transform_data(*, data: Generator, table: str) -> Generator:
         yield tables[table](*item).get_bulk_format()
 
 
-# @backoff()
+@backoff()
 def load_data(*, data: Generator, table: str) -> None:
     """
     Функция загрузки данных в elasticsearch

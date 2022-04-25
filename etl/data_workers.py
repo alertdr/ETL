@@ -157,7 +157,7 @@ class Filmwork:
 @dataclass
 class Person:
     id: str
-    full_name: str
+    name: str
     roles: list | None
     films_as_actor: list | None
     films_as_director: list | None

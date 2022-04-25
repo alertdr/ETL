@@ -41,6 +41,7 @@ ORDER BY genre.modified;
     'person': lambda ids: f'''
 SELECT person.id,
        person.full_name,
+       ARRAY_AGG(DISTINCT person_film_work.role)                                  AS roles,
        ARRAY_AGG(DISTINCT film_work.id)
        FILTER (WHERE UPPER(person_film_work.role::text) LIKE UPPER('%actor%'))    AS films_as_actor,
        ARRAY_AGG(DISTINCT film_work.id)

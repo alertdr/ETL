@@ -49,6 +49,9 @@
         "type": "text",
         "analyzer": "ru_en"
       },
+      "roles": {
+        "type": "keyword"
+      },
       "films_as_actor": {
         "type": "keyword"
       },

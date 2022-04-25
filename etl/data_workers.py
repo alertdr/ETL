@@ -158,6 +158,7 @@ class Filmwork:
 class Person:
     id: str
     full_name: str
+    roles: list | None
     films_as_actor: list | None
     films_as_director: list | None
     films_as_writer: list | None

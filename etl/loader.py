@@ -25,6 +25,7 @@ def extract_data(*, table: str, table_state: dict) -> Generator:
     Функция извлечения данных из postgresql
 
     :param table: название таблицы
+    :param table_state: состояние загрузки последней таблицы
     :yield: item: единичный результат выполнения sql запроса
     """
     with PostgresLoader(fetch_size=BATCH_SIZE) as pg_ids:
@@ -41,8 +42,8 @@ def transform_data(*, data: Generator, table: str) -> Generator:
     """
     Функция форматирования сырого sql поля в требуемый elasticsearch
 
-    :param table: название таблицы
     :param data: строка tuple - результат выполнения sql запроса
+    :param table: название таблицы
     :yield: dict: отформатированный словарь для bulk запроса Elasticsearch
     """
     for item in data:
@@ -73,6 +74,9 @@ def load_data(*, data: Generator, table: str) -> None:
 def main(*, table: str, table_state: dict) -> None:
     """
     Отказоустойчивая ETL функция
+
+    :param table: название таблицы
+    :param table_state: состояние загрузки последней таблицы
     """
     data = extract_data(table=table, table_state=table_state)
     pretty_data = transform_data(data=data, table=table)
@@ -83,7 +87,6 @@ if __name__ == '__main__':
     config.fileConfig(LOGGER_CONF_PATH)
     state = State(storage=JsonFileStorage(file_path=STATE_FILE_PATH))
     while True:
-        # states = [state.get_state(key=table) for table in TABLES]
         for table in tables.keys():
             logging.info(f'Query {table} started')
             result_state = state.get_state(key=table)

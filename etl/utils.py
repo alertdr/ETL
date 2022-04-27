@@ -47,7 +47,14 @@ def get_format_time(*, time: str) -> str:
     return f'\'{time}\'' if time else None
 
 
-def latest_modified(*, current: Optional[datetime] = None, obj_time: list) -> datetime:
+def latest_datetime_from_list(*, current: Optional[datetime] = None, obj_time: list) -> datetime:
+    """
+    Функция нахождения максимального времени в списке
+
+    :param current: текущее время
+    :param obj_time: время объекта
+    :return: максимальное время
+    """
     if not all(obj_time):
         return current
 
@@ -59,7 +66,14 @@ def latest_modified(*, current: Optional[datetime] = None, obj_time: list) -> da
     return current
 
 
-def latest_modified_datetime(*, current: Optional[datetime] = None, obj_time: datetime) -> datetime:
+def latest_datetime(*, current: Optional[datetime] = None, obj_time: datetime) -> datetime:
+    """
+    Функция нахождения максимального времени
+
+    :param current: текущее время
+    :param obj_time: время объекта
+    :return: максимальное время
+    """
     if not obj_time:
         return current
 
@@ -69,10 +83,3 @@ def latest_modified_datetime(*, current: Optional[datetime] = None, obj_time: da
     else:
         current = obj_time
     return current
-
-
-def format_set(*, data: dict) -> tuple:
-    if data:
-        return list(data.keys()), [{'id': v, 'name': k} for k, v in data.items()]
-    else:
-        return None, None

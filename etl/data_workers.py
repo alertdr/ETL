@@ -2,7 +2,6 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from time import sleep
 from typing import Generator, Optional, Union
 
 import psycopg2
@@ -10,7 +9,7 @@ from elasticsearch import Elasticsearch
 from psycopg2.extras import DictCursor
 
 from etc.config import DSL, ES_CONFIG
-from utils import latest_modified, format_set, latest_modified_datetime
+from utils import latest_datetime_from_list, latest_datetime
 
 
 class PostgresLoader:
@@ -44,16 +43,6 @@ class PostgresLoader:
         while rows := self.cursor.fetchmany(size=self.fetch_size):
             logging.info(f'Postgres executed: {len(rows)}')
             yield rows
-
-    def get_filmwork_modified(self, *, filmwork_id: str) -> list:
-        """
-        Метод извлечения последнего времени изменения конкретного кинопроизведения по id
-
-        :param filmwork_id: id кинопроизведения
-        :return: результат извлечения времени последнего изменения конкретного кинопроизведения
-        """
-        self.cursor.execute(f'SELECT modified FROM film_work WHERE id = \'{filmwork_id}\'')
-        return self.cursor.fetchone()
 
 
 class ElasticsearchLoader:
@@ -115,18 +104,18 @@ class Filmwork:
     person_latest_modified = None
 
     def __post_init__(self):
-        self.actors_names, self.actors = format_set(data=self.actors)
-        self.writers_names, self.writers = format_set(data=self.writers)
-        self.directors_names, self.director = format_set(data=self.director)
-        self.genres_names, self.genre = format_set(data=self.genre)
+        self.actors_names, self.actors = self.format_obj_agg(data=self.actors)
+        self.writers_names, self.writers = self.format_obj_agg(data=self.writers)
+        self.directors_names, self.director = self.format_obj_agg(data=self.director)
+        self.genres_names, self.genre = self.format_obj_agg(data=self.genre)
 
         self.set_latest(fw_time=self.filmwork_time, person_time=self.person_time, genre_time=self.genre_time)
 
     @classmethod
     def set_latest(cls, *, fw_time, person_time, genre_time):
-        cls.filmwork_latest_modified = latest_modified_datetime(current=cls.filmwork_latest_modified, obj_time=fw_time)
-        cls.person_latest_modified = latest_modified(current=cls.person_latest_modified, obj_time=person_time)
-        cls.genre_latest_modified = latest_modified(current=cls.genre_latest_modified, obj_time=genre_time)
+        cls.filmwork_latest_modified = latest_datetime(current=cls.filmwork_latest_modified, obj_time=fw_time)
+        cls.person_latest_modified = latest_datetime_from_list(current=cls.person_latest_modified, obj_time=person_time)
+        cls.genre_latest_modified = latest_datetime_from_list(current=cls.genre_latest_modified, obj_time=genre_time)
 
     def get_bulk_format(self) -> dict:
         """
@@ -154,6 +143,19 @@ class Filmwork:
             'genre_date': cls.genre_latest_modified
         }
 
+    @staticmethod
+    def format_obj_agg(*, data: dict) -> tuple:
+        """
+        Функция форматирования агрегации объекта filmwork в postgresql
+
+        :param data: форматируемый словарь
+        :return: список наименований, словарь айди: наименование
+        """
+        if data:
+            return list(data.keys()), [{'id': v, 'name': k} for k, v in data.items()]
+        else:
+            return None, None
+
 
 @dataclass
 class Person:
@@ -179,8 +181,8 @@ class Person:
 
     @classmethod
     def set_latest(cls, *, fw_time, person_time):
-        cls.filmwork_latest_modified = latest_modified(current=cls.filmwork_latest_modified, obj_time=fw_time)
-        cls.person_latest_modified = latest_modified_datetime(current=cls.person_latest_modified, obj_time=person_time)
+        cls.filmwork_latest_modified = latest_datetime_from_list(current=cls.filmwork_latest_modified, obj_time=fw_time)
+        cls.person_latest_modified = latest_datetime(current=cls.person_latest_modified, obj_time=person_time)
 
     def get_bulk_format(self) -> dict:
         """
@@ -219,7 +221,7 @@ class Genre:
 
     @classmethod
     def set_latest(cls, *, genre_time):
-        cls.genre_latest_modified = latest_modified_datetime(current=cls.genre_latest_modified, obj_time=genre_time)
+        cls.genre_latest_modified = latest_datetime(current=cls.genre_latest_modified, obj_time=genre_time)
 
     def get_bulk_format(self) -> dict:
         """

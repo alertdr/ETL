@@ -2,6 +2,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from time import sleep
 from typing import Generator, Optional, Union
 
 import psycopg2
@@ -159,9 +160,9 @@ class Person:
     id: str
     name: str
     roles: list | None
-    films_as_actor: list | None
-    films_as_director: list | None
-    films_as_writer: list | None
+    films_as_actor: str | None
+    films_as_director: str | None
+    films_as_writer: str | None
     person_time: datetime
     filmwork_time: list
     filmwork_latest_modified = None
@@ -169,6 +170,12 @@ class Person:
 
     def __post_init__(self):
         self.set_latest(fw_time=self.filmwork_time, person_time=self.person_time)
+        self.films_as_actor = self.films_as_actor.replace('{', '').replace('}', '').split(
+            ',') if self.films_as_actor else None
+        self.films_as_director = self.films_as_director.replace('{', '').replace('}', '').split(
+            ',') if self.films_as_director else None
+        self.films_as_writer = self.films_as_writer.replace('{', '').replace('}', '').split(
+            ',') if self.films_as_writer else None
 
     @classmethod
     def set_latest(cls, *, fw_time, person_time):
